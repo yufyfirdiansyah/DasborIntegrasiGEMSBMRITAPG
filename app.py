@@ -39,6 +39,12 @@ except ImportError:
 # Initialize Flask
 app = Flask(__name__)
 
+# Configure custom request session with real user-agent to bypass yfinance cloud IP blocking
+yf_session = requests.Session()
+yf_session.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+})
+
 BASE_DIR = os.getcwd()
 IS_VERCEL = os.environ.get('VERCEL') == '1' or os.environ.get('AWS_LAMBDA_FUNCTION_NAME') is not None
 
@@ -111,7 +117,7 @@ def get_webhook_url():
 def fetch_yesterday_vwaps(ticker):
     log_message(f"[{ticker}] Fetching Yesterday's completed EOD VWAP from 5m candles...")
     try:
-        df_i = yf.download(ticker, period='5d', interval='5m', progress=False)
+        df_i = yf.download(ticker, period='5d', interval='5m', progress=False, session=yf_session)
         if not df_i.empty:
             if isinstance(df_i.columns, pd.MultiIndex):
                 df_i.columns = df_i.columns.get_level_values(0)
@@ -198,7 +204,7 @@ def run_prediction_for_asset(asset_key):
     raw_data = {}
     log_message(f"[{asset_key}] Fetching daily data from Yahoo Finance...")
     try:
-        all_df = yf.download(" ".join(tickers_list), period='60d', interval='1d', progress=False, group_by='ticker')
+        all_df = yf.download(" ".join(tickers_list), period='60d', interval='1d', progress=False, group_by='ticker', session=yf_session)
     except Exception as ex:
         log_message(f"[{asset_key} ERROR] Failed to fetch bulk data: {ex}")
         all_df = pd.DataFrame()
