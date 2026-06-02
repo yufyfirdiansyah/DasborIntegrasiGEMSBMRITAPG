@@ -39,11 +39,7 @@ except ImportError:
 # Initialize Flask
 app = Flask(__name__)
 
-# Configure custom request session with real user-agent to bypass yfinance cloud IP blocking
-yf_session = requests.Session()
-yf_session.headers.update({
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-})
+
 
 BASE_DIR = os.getcwd()
 IS_VERCEL = os.environ.get('VERCEL') == '1' or os.environ.get('AWS_LAMBDA_FUNCTION_NAME') is not None
@@ -56,19 +52,22 @@ PATHS = {
         'MODEL': os.path.join(BASE_DIR, 'Project_GEMS_Modelling', 'gems_logistic_regression.joblib'),
         'SCALER': os.path.join(BASE_DIR, 'Project_GEMS_Modelling', 'gems_scaler.joblib'),
         'PARAMS': os.path.join(BASE_DIR, 'Project_GEMS_Modelling', 'gems_model_parameters.json'),
-        'CACHE': '/tmp/gems_latest_prediction.json' if IS_VERCEL else os.path.join(BASE_DIR, 'Project_GEMS_Modelling', 'latest_prediction.json')
+        'CACHE': '/tmp/gems_latest_prediction.json' if IS_VERCEL else os.path.join(BASE_DIR, 'Project_GEMS_Modelling', 'latest_prediction.json'),
+        'STATIC_CACHE': os.path.join(BASE_DIR, 'Project_GEMS_Modelling', 'latest_prediction.json')
     },
     'TAPG': {
         'MODEL': os.path.join(BASE_DIR, 'Project_TAPG_Modelling', 'tapg_logistic_regression.joblib'),
         'SCALER': os.path.join(BASE_DIR, 'Project_TAPG_Modelling', 'tapg_scaler.joblib'),
         'PARAMS': os.path.join(BASE_DIR, 'Project_TAPG_Modelling', 'tapg_model_parameters.json'),
-        'CACHE': '/tmp/tapg_latest_prediction.json' if IS_VERCEL else os.path.join(BASE_DIR, 'Project_TAPG_Modelling', 'latest_prediction.json')
+        'CACHE': '/tmp/tapg_latest_prediction.json' if IS_VERCEL else os.path.join(BASE_DIR, 'Project_TAPG_Modelling', 'latest_prediction.json'),
+        'STATIC_CACHE': os.path.join(BASE_DIR, 'Project_TAPG_Modelling', 'latest_prediction.json')
     },
     'BMRI': {
         'MODEL': os.path.join(BASE_DIR, 'Project_BMRI_Modelling', 'bmri_logistic_regression.joblib'),
         'SCALER': os.path.join(BASE_DIR, 'Project_BMRI_Modelling', 'bmri_scaler.joblib'),
         'PARAMS': os.path.join(BASE_DIR, 'Project_BMRI_Modelling', 'bmri_model_parameters.json'),
-        'CACHE': '/tmp/bmri_latest_prediction.json' if IS_VERCEL else os.path.join(BASE_DIR, 'Project_BMRI_Modelling', 'latest_prediction.json')
+        'CACHE': '/tmp/bmri_latest_prediction.json' if IS_VERCEL else os.path.join(BASE_DIR, 'Project_BMRI_Modelling', 'latest_prediction.json'),
+        'STATIC_CACHE': os.path.join(BASE_DIR, 'Project_BMRI_Modelling', 'latest_prediction.json')
     }
 }
 
@@ -117,7 +116,7 @@ def get_webhook_url():
 def fetch_yesterday_vwaps(ticker):
     log_message(f"[{ticker}] Fetching Yesterday's completed EOD VWAP from 5m candles...")
     try:
-        df_i = yf.download(ticker, period='5d', interval='5m', progress=False, session=yf_session)
+        df_i = yf.download(ticker, period='5d', interval='5m', progress=False)
         if not df_i.empty:
             if isinstance(df_i.columns, pd.MultiIndex):
                 df_i.columns = df_i.columns.get_level_values(0)
@@ -204,7 +203,7 @@ def run_prediction_for_asset(asset_key):
     raw_data = {}
     log_message(f"[{asset_key}] Fetching daily data from Yahoo Finance...")
     try:
-        all_df = yf.download(" ".join(tickers_list), period='60d', interval='1d', progress=False, group_by='ticker', session=yf_session)
+        all_df = yf.download(" ".join(tickers_list), period='60d', interval='1d', progress=False, group_by='ticker')
     except Exception as ex:
         log_message(f"[{asset_key} ERROR] Failed to fetch bulk data: {ex}")
         all_df = pd.DataFrame()
@@ -466,6 +465,18 @@ def get_prediction(asset):
         
     try:
         cache_path = PATHS[asset]['CACHE']
+        static_cache_path = PATHS[asset]['STATIC_CACHE']
+        
+        # Load from static repository cache if active dynamic cache doesn't exist yet (for seamless Vercel cold-starts)
+        if not os.path.exists(cache_path) and os.path.exists(static_cache_path):
+            try:
+                import shutil
+                os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                shutil.copy(static_cache_path, cache_path)
+                log_message(f"[{asset}] Pre-calculated static cache copied to Vercel ephemeral space successfully.")
+            except Exception as copy_err:
+                log_message(f"[{asset} WARNING] Ephemeral static cache copy failed: {copy_err}")
+                
         if os.path.exists(cache_path):
             with open(cache_path, 'r') as f:
                 data = json.load(f)
@@ -1598,7 +1609,7 @@ UNIFIED_HTML_TEMPLATE = """
             if (data.global_sentiment) {
                 Object.keys(data.global_sentiment).forEach(key => {
                     const returnVal = data.global_sentiment[key];
-                    const price = data.raw_prices ? data.raw_prices[key] : 0;
+                    const priceVal = (data.raw_prices && data.raw_prices[key] !== undefined) ? data.raw_prices[key] : 0;
                     
                     const item = document.createElement('div');
                     item.className = "vector-item";
@@ -1606,11 +1617,11 @@ UNIFIED_HTML_TEMPLATE = """
                     const sign = returnVal >= 0 ? "+" : "";
                     const valClass = returnVal >= 0 ? "val-up" : "val-down";
                     
-                    let formattedPrice = formatNumber(price);
+                    let formattedPrice = formatNumber(priceVal);
                     if (key === "USDIDR") {
-                        formattedPrice = formatNumber(Math.round(price));
-                    } else if (price % 1 !== 0) {
-                        formattedPrice = price.toFixed(2);
+                        formattedPrice = formatNumber(Math.round(priceVal));
+                    } else if (priceVal % 1 !== 0) {
+                        formattedPrice = priceVal.toFixed(2);
                     }
                     
                     item.innerHTML = `

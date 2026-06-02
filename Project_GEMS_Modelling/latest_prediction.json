@@ -1,0 +1,38 @@
+{
+    "asset": "GEMS",
+    "last_sync": "2026-06-02 17:45:18 WIB",
+    "target_date": "2026-06-02",
+    "decision": "SELL",
+    "signal_code": 1,
+    "confidence": 0.5825662148007629,
+    "bullish_ratio": "2/5 BULLISH",
+    "price": {
+        "close": 7125.0,
+        "open": 7500.0,
+        "volume": 152100,
+        "high": 7500.0,
+        "low": 7125.0
+    },
+    "raw_prices": {
+        "FXI": 35.04999923706055,
+        "NG": 3.178999900817871,
+        "USDIDR": 17879.0,
+        "BTU": 27.049999237060547,
+        "WHC": 9.0
+    },
+    "technical": {
+        "ma20": 7661.25,
+        "vwap": 7186.629746835443,
+        "prev_vwap": 7630.503070382617,
+        "volume_ma20": 125625.0,
+        "change_pct": -5.3156146179402,
+        "volume_change_pct": -28.691983122362874
+    },
+    "global_sentiment": {
+        "FXI": 0.0,
+        "NG": -3.373862076662082,
+        "USDIDR": 0.21860986547084238,
+        "BTU": 0.0,
+        "WHC": 2.857142857142847
+    }
+}

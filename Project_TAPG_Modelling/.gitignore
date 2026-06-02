@@ -2,6 +2,5 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 dashboard_logs.txt
-latest_prediction.json
 .vscode/
 *.joblib.tmp
