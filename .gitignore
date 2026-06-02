@@ -1,0 +1,29 @@
+# Ignore local virtual environments
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Ignore model joblib weights (since parameters are extracted into JSONs)
+*.joblib
+
+# Ignore logs and temp configurations
+dashboard_logs.txt
+latest_prediction.json
+
+# Ignore temporary visual curves and compiled PDFs
+*.png
+*.pdf
+
+# Ignore Google Apps Script Javascript file (already hosted on Google)
+Unified_Data_Extraction.js
+
+# Ignore training and local utility scripts
+generate_unified_pdf_report.py
+pull_and_push_all_to_sheets.py
+Project_BMRI_Modelling/train_and_save_model.py
+Project_TAPG_Modelling/train_and_save_model.py
+
+# Ignore VS Code workspace configurations
+*.code-workspace
+.vscode/

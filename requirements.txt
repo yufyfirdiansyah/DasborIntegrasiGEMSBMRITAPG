@@ -1,0 +1,5 @@
+Flask==3.0.0
+pandas==2.1.3
+yfinance==0.2.33
+requests==2.31.0
+gunicorn==21.2.0
