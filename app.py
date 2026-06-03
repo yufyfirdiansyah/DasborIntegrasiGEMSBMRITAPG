@@ -1449,11 +1449,11 @@ UNIFIED_HTML_TEMPLATE = """
                 
                 <div class="console-body" id="console-body">
                     <div class="webhook-flex">
-                        <input type="text" id="webhook-input" class="webhook-input" placeholder="Google Sheet Webhook URL (https://script.google.com/macros/s/.../exec)">
-                        <button class="btn btn-accent" id="save-webhook-btn">
+                        <input type="text" id="webhook-input" class="webhook-input" placeholder="Google Sheet Webhook URL (https://script.google.com/macros/s/.../exec)" style="display: none;">
+                        <button class="btn btn-accent" id="save-webhook-btn" style="display: none;">
                             <i class="fa-solid fa-floppy-disk"></i> Simpan
                         </button>
-                        <button class="btn" id="sync-btn">
+                        <button class="btn" id="sync-btn" style="width: 100%;">
                             <i class="fa-solid fa-arrows-rotate" id="sync-icon"></i> Sync Ticker
                         </button>
                     </div>
