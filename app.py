@@ -100,13 +100,27 @@ except:
 # Dynamic Config Helpers
 def get_webhook_url():
     webhook_url = os.environ.get('WEBHOOK_URL', '').strip()
-    if not webhook_url and os.path.exists(CONFIG_PATH):
-        try:
-            with open(CONFIG_PATH, 'r') as f:
-                config_data = json.load(f)
-                webhook_url = config_data.get('webhook_url', '').strip()
-        except:
-            pass
+    if not webhook_url:
+        # 1. Cek di /tmp (jika berjalan di Vercel dan pernah disimpan secara dinamis)
+        tmp_path = '/tmp/unified_dashboard_config.json'
+        if os.path.exists(tmp_path):
+            try:
+                with open(tmp_path, 'r') as f:
+                    config_data = json.load(f)
+                    webhook_url = config_data.get('webhook_url', '').strip()
+            except:
+                pass
+        
+        # 2. Cek di root repositori (dashboard_config.json bawaan)
+        if not webhook_url:
+            repo_path = os.path.join(BASE_DIR, 'dashboard_config.json')
+            if os.path.exists(repo_path):
+                try:
+                    with open(repo_path, 'r') as f:
+                        config_data = json.load(f)
+                        webhook_url = config_data.get('webhook_url', '').strip()
+                except:
+                    pass
     return webhook_url
 
 # =====================================================================
