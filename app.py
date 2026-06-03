@@ -201,25 +201,73 @@ def run_prediction_for_asset(asset_key):
     # 3. Pull daily prices
     tickers_list = [primary_ticker] + list(macros.values())
     raw_data = {}
-    log_message(f"[{asset_key}] Fetching daily data from Yahoo Finance...")
-    try:
-        all_df = yf.download(" ".join(tickers_list), period='60d', interval='1d', progress=False, group_by='ticker')
-    except Exception as ex:
-        log_message(f"[{asset_key} ERROR] Failed to fetch bulk data: {ex}")
-        all_df = pd.DataFrame()
-        
-    for k, ticker in ([(asset_key, primary_ticker)] + list(macros.items())):
+    
+    if IS_VERCEL:
+        log_message(f"[{asset_key}] VERCEL DETECTED: Fetching data from Google Sheets Proxy via GAS...")
+        webhook_url = get_webhook_url()
+        if not webhook_url:
+            raise Exception("GAS Webhook URL is not configured in environment or dashboard_config.json!")
+            
         try:
-            if not all_df.empty:
-                df_t = all_df[ticker].dropna(subset=['Close'])
-                if isinstance(df_t.columns, pd.MultiIndex):
-                    df_t.columns = df_t.columns.get_level_values(0)
-            else:
-                df_t = pd.DataFrame()
-            raw_data[k] = df_t
+            # Ambil data dari GAS
+            gas_url = f"{webhook_url}?action=get_raw_data&asset={asset_key}"
+            response = requests.get(gas_url, timeout=25)
+            if response.status_code != 200:
+                raise Exception(f"GAS HTTP Error: {response.status_code}")
+                
+            res_json = response.json()
+            if res_json.get('status') != 'success':
+                raise Exception(f"GAS App Error: {res_json.get('message')}")
+                
+            sheet_data = res_json.get('data', [])
+            if not sheet_data:
+                raise Exception("Received empty dataset from Google Sheets!")
+                
+            # Konversi data Google Sheets ke pandas DataFrame dengan struktur yfinance
+            df_all = pd.DataFrame(sheet_data)
+            df_all['Date'] = pd.to_datetime(df_all['Date'])
+            df_all.set_index('Date', inplace=True)
+            
+            # 1. Primary Asset
+            df_p = pd.DataFrame(index=df_all.index)
+            df_p['Close'] = df_all[f'{asset_key}_Close'].astype(float)
+            df_p['Open'] = df_all[f'{asset_key}_Open'].astype(float)
+            df_p['Volume'] = df_all[f'{asset_key}_Volume'].astype(float)
+            df_p['High'] = df_all[f'{asset_key}_High'].astype(float)
+            df_p['Low'] = df_all[f'{asset_key}_Low'].astype(float)
+            raw_data[asset_key] = df_p
+            
+            # 2. Macro Assets
+            for k, ticker in macros.items():
+                df_m = pd.DataFrame(index=df_all.index)
+                df_m['Close'] = df_all[f'{k}_Close'].astype(float)
+                raw_data[k] = df_m
+                
+            log_message(f"[{asset_key}] Google Sheets Proxy data processed successfully. Total rows: {len(df_all)}")
+            
         except Exception as ex:
-            log_message(f"[{asset_key} WARNING] Missing data for ticker {ticker}: {ex}")
-            raw_data[k] = pd.DataFrame()
+            log_message(f"[{asset_key} ERROR] Failed to fetch proxy data: {ex}")
+            raise ex
+    else:
+        log_message(f"[{asset_key}] LOCAL DETECTED: Fetching daily data from Yahoo Finance directly...")
+        try:
+            all_df = yf.download(" ".join(tickers_list), period='60d', interval='1d', progress=False, group_by='ticker')
+        except Exception as ex:
+            log_message(f"[{asset_key} ERROR] Failed to fetch bulk data: {ex}")
+            all_df = pd.DataFrame()
+            
+        for k, ticker in ([(asset_key, primary_ticker)] + list(macros.items())):
+            try:
+                if not all_df.empty:
+                    df_t = all_df[ticker].dropna(subset=['Close'])
+                    if isinstance(df_t.columns, pd.MultiIndex):
+                        df_t.columns = df_t.columns.get_level_values(0)
+                else:
+                    df_t = pd.DataFrame()
+                raw_data[k] = df_t
+            except Exception as ex:
+                log_message(f"[{asset_key} WARNING] Missing data for ticker {ticker}: {ex}")
+                raw_data[k] = pd.DataFrame()
             
     # Validate primary asset
     primary_df = raw_data[asset_key]
@@ -1872,5 +1920,5 @@ def index():
 if __name__ == '__main__':
     log_message("=== STARTING UNIFIED TRADING DASHBOARD INTEGRATION SYSTEM ===")
     log_message(f"Active workspace models: GEMS, TAPG, BMRI")
-    # Bind to port 5001 (or custom Vercel settings)
-    app.run(host='127.0.0.1', port=5001, debug=False)
+    # Bind to port 5005 (or custom Vercel settings)
+    app.run(host='127.0.0.1', port=5005, debug=False)
