@@ -128,6 +128,10 @@ def get_webhook_url():
 # =====================================================================
 
 def fetch_yesterday_vwaps(ticker):
+    if IS_VERCEL:
+        log_message(f"[{ticker}] VERCEL DETECTED: Bypassing direct yfinance intraday download to prevent IP block.")
+        return None, None
+        
     log_message(f"[{ticker}] Fetching Yesterday's completed EOD VWAP from 5m candles...")
     try:
         df_i = yf.download(ticker, period='5d', interval='5m', progress=False)
@@ -494,9 +498,10 @@ def run_multi_scheduler_loop():
             
         time.sleep(30)
 
-# Run background thread
-scheduler_thread = threading.Thread(target=run_multi_scheduler_loop, daemon=True)
-scheduler_thread.start()
+# Run background thread (Skip on Vercel)
+if not IS_VERCEL:
+    scheduler_thread = threading.Thread(target=run_multi_scheduler_loop, daemon=True)
+    scheduler_thread.start()
 
 # Load initial predictions on startup
 def load_startup_predictions():
@@ -513,7 +518,8 @@ def load_startup_predictions():
         except Exception as e:
             log_message(f"[STARTUP WARNING] Failed initializing GEMS/TAPG/BMRI: {e}")
 
-load_startup_predictions()
+if not IS_VERCEL:
+    load_startup_predictions()
 
 # =====================================================================
 # API SINK ENDPOINTS FOR FRONTEND AND REAL-TIME LOGGING
@@ -539,8 +545,11 @@ def get_prediction(asset):
             except Exception as copy_err:
                 log_message(f"[{asset} WARNING] Ephemeral static cache copy failed: {copy_err}")
                 
-        if os.path.exists(cache_path):
-            with open(cache_path, 'r') as f:
+        # Use static cache as fallback directly if dynamic cache is missing or copying failed
+        effective_cache_path = cache_path if os.path.exists(cache_path) else (static_cache_path if os.path.exists(static_cache_path) else None)
+        
+        if effective_cache_path:
+            with open(effective_cache_path, 'r') as f:
                 data = json.load(f)
             
             # Map legacy cache price keys to standardized 'price'
